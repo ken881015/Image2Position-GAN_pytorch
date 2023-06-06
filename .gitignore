@@ -2,3 +2,4 @@ Log/
 Image/img*
 Image/*.jpg
 Image/*.png
+Main/__pycache__

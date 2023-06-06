@@ -347,7 +347,7 @@ def main():
     # ==Dataset and Dataloader==
     # magic number of Normalization mean=[0.485, 0.456, 0.406],std=[0.229, 0.224, 0.225])
     aug_set = [
-        RandomErase_wk(seed=args.seed, max_num=4),
+        RandomErase_wk(seed=args.seed, max_num=6),
         # transforms.RandomErasing(p=1, scale=(0.02,0.3), ratio=(0.3,3.3), value='random'),
         # ChannelScale_wk(),
         transforms.ColorJitter(brightness=0.3, contrast=0.3, saturation=0.3, hue=0.1),
@@ -457,23 +457,24 @@ def main():
         # ====
         uv_kpt_ind = np.loadtxt('../Image/uv_kpt_ind.txt').astype(np.int32) # 2 x 68 get kpt
         
-        # for i in [0]:
-        #     ckpt = torch.load(f"../Log/GAN_training_log/img_npy_5/ckpt/ckpt_epoch_{(i+1)*5:03d}.pth", map_location=device)
+        for i in [6]:
+            ckpt = torch.load(f"../Log/GAN_training_log/img_npy_5/ckpt/ckpt_epoch_{(i+1)*10:03d}.pth", map_location=device)
             
-        #     G = Generator(in_channels=3 ,args= args).to(device)
-        #     G.load_state_dict(ckpt["Generator"])
-        #     G.to(device)
-        #     G.eval()
+            G = Generator(in_channels=3 ,args= args).to(device)
+            G.load_state_dict(ckpt["Generator"])
+            G.to(device)
+            G.eval()
             
-        #     subprocess.run(["rm", "../Log/GAN_training_log/img_npy_5/Name.log"])
-        #     subprocess.run(["rm", "../Log/GAN_training_log/img_npy_5/NME_2D_68.log"])
-        #     subprocess.run(["rm", "../Log/GAN_training_log/img_npy_5/NME_3D_68.log"])
+            subprocess.run(["rm", "../Log/GAN_training_log/img_npy_5/Name.log"])
+            subprocess.run(["rm", "../Log/GAN_training_log/img_npy_5/NME_2D_68.log"])
+            subprocess.run(["rm", "../Log/GAN_training_log/img_npy_5/NME_3D_68.log"])
             
-        #     Name_list, NME_2D_68_list, NME_3D_68_list = get_align68_losses(G, benchmark, inverse_transform, uv_kpt_ind, parent_dir)
+            Name_list, NME_2D_68_list, NME_3D_68_list = get_align68_losses(G, benchmark, inverse_transform, uv_kpt_ind, parent_dir)
         
-        #     print(f"NME_3D_68 Error: Mean:{np.mean(NME_3D_68_list)*100:.3f}%, Var:{np.var(NME_3D_68_list):.3f}")
-        #     print(f"NME_2D_68 Error: Mean:{np.mean(NME_2D_68_list)*100:.3f}%, Var:{np.var(NME_2D_68_list):.3f}")
+            # print(f"NME_3D_68 Error: Mean:{np.mean(NME_3D_68_list)*100:.3f}%, Var:{np.var(NME_3D_68_list):.3f}")
+            print(f"NME_2D_68 Error: Mean:{np.mean(NME_2D_68_list)*100:.3f}%, Var:{np.var(NME_2D_68_list):.3f}")
             
+            continue
             
         #     # sorted by NME 2d error from high to low
         #     assemble = list(zip(Name_list, NME_2D_68_list)) # pitch yaw roll
@@ -501,14 +502,14 @@ def main():
         #     grid_of_alignment(G_in, G_out, uv_kpt_ind, f"../Image/img_npy_5/worst_GAN_epoch{i*10}.jpg",  error_list = NME_2D_68_list[:48])
         #     grid_of_alignment(G_in, G_GT, uv_kpt_ind, f"../Image/img_npy_5/worst_GT_epoch{i*10}.jpg")
         
-        # sys.exit()
+        sys.exit()
         
         
         
         
         
         # ckpt = load_newest_ckpt(args.ckpt_dir, device)
-        ckpt = torch.load("../Log/GAN_training_log/img_npy_3/ckpt/ckpt_epoch_300.pth", map_location=device)
+        ckpt = torch.load("../Log/GAN_training_log/img_npy_4/ckpt/ckpt_epoch_170.pth", map_location=device)
         
         G = Generator(in_channels=3 ,args= args).to(device)
         G.load_state_dict(ckpt["Generator"])
@@ -554,7 +555,7 @@ def main():
         
         # == calculate the NME of each validation data in benchmark dataset
         #! already sorted by name!!!
-        Name_list, NME_2D_68_list, NME_3D_68_list = get_align68_losses(G, benchmark, inverse_transform, uv_kpt_ind, parent_dir)
+        Name_list, NME_2D_68_list, NME_3D_68_list = get_align68_losses(G, benchmark, inverse_transform, uv_kpt_ind, "../Log/GAN_training_log/img_npy_4/")
         
         # == Analysis of alignment error
         with open("./AFLW2000-3D_fname_pose_gimbal_lock", 'rb')as fp:
@@ -565,26 +566,36 @@ def main():
         assert(Name_list == fname_list)
         
         
+        # dict = {
+        #     "pitch": (0, [30, 60] , [1814, 128,  58,]),
+        #     "yaw"  : (1, [30, 60] , [1313, 383, 304] ),
+        #     'roll' : (2, [60, 120], [1931, 60, 9,]   )
+        # }
         
+        # choose = "roll"
         
+        # l = [0.,0.,0.]
         
-        
-        # a=0
-        # b=0
-        # c=0
-        
-        # for error,angle in zip(NME_3D_68_list, angle_list):
-        #     if np.abs(angle[0]) < 30:
-        #         a += error
-        #     elif np.abs(angle[0]) < 60:
-        #         b += error
+        # for error,angle in zip(NME_2D_68_list, angle_list):
+        #     if np.abs(angle[dict[choose][0]]) < dict[choose][1][0]:
+        #         l[0] += error
+        #     elif np.abs(angle[dict[choose][0]]) < dict[choose][1][1]:
+        #         l[1] += error
         #     else:
-        #         c += error
+        #         l[2] += error
         
-        # print(f"{a/1814*100:.2f}%")
-        # print(f"{b/128 *100:.2f}%")
-        # print(f"{c/58  *100:.2f}%")
-            
+        # print(choose)
+        # print(f"{0:03d}~{dict[choose][1][0]:03d}:{l[0]/dict[choose][2][0]*100:.2f}%")
+        # print(f"{dict[choose][1][0]:03d}~{dict[choose][1][1]:03d}:{l[1]/dict[choose][2][1]*100:.2f}%")
+        # print(f"{dict[choose][1][1]:03d}~   :{l[2]/dict[choose][2][2]*100:.2f}%")
+        
+        # print(f"Mean: {(l[0]/dict[choose][2][0] + l[1]/dict[choose][2][1] + l[2]/dict[choose][2][2])*100/3:.2f}%")
+        # print(f"Total Mean: {(l[0] + l[1] + l[2])/2000*100:.2f}%")
+        
+        ## gimbol lock + roll 0~60~120~180
+        # AFLW2000_3D_pitch = np.array([1814, 128,  58,])
+        # AFLW2000_3D_yaw = np.array([1313, 383, 304,])
+        # AFLW2000_3D_roll = np.array([1931, 60, 9,])
         
         ## == statistic by zy ==
         # AFLW2000_3D_pitch = np.array([1813, 126, 61])
@@ -595,12 +606,6 @@ def main():
         # AFLW2000_3D_pitch = np.array([1814, 128,  58,])
         # AFLW2000_3D_yaw = np.array([1313, 383, 304,])
         # AFLW2000_3D_roll = np.array([1746, 185,  69,])
-        
-        ## gimbol lock + roll 0~60~120~180
-        # AFLW2000_3D_pitch = np.array([1814, 128,  58,])
-        # AFLW2000_3D_yaw = np.array([1313, 383, 304,])
-        # AFLW2000_3D_roll = np.array([1931, 60, 9,])
-        
         
         
         
@@ -624,59 +629,57 @@ def main():
         #     NME_2D_68_list.pop(i)
         #     angle_list.pop(i)
         
-        print(f"NME_3D_68 Error: Mean:{np.mean(NME_3D_68_list)*100:.3f}%, Var:{np.var(NME_3D_68_list):.3f}")
-        print(f"NME_2D_68 Error: Mean:{np.mean(NME_2D_68_list)*100:.3f}%, Var:{np.var(NME_2D_68_list):.3f}")
+        # print(f"NME_3D_68 Error: Mean:{np.mean(NME_3D_68_list)*100:.3f}%, Var:{np.var(NME_3D_68_list):.3f}")
+        # print(f"NME_2D_68 Error: Mean:{np.mean(NME_2D_68_list)*100:.3f}%, Var:{np.var(NME_2D_68_list):.3f}")
     
     
         
-        fig = plt.figure(figsize=(50,20))
-        # pitch
-        color_list = ["green" if np.abs(angle[0])<30  else ("blue" if np.abs(angle[0])<60 else "red") for angle in angle_list]
-        # yaw
-        color_list = ["green" if np.abs(angle[1])<30  else ("blue" if np.abs(angle[1])<60 else "red") for angle in angle_list]
-        # # roll
-        color_list = ["green" if np.abs(angle[2])<60  else ("blue" if np.abs(angle[2])<120 else "red") for angle in angle_list]
+        # fig = plt.figure(figsize=(50,20))
+        # # pitch
+        # color_list = ["green" if np.abs(angle[0])<30  else ("blue" if np.abs(angle[0])<60 else "red") for angle in angle_list]
+        # # yaw
+        # color_list = ["green" if np.abs(angle[1])<30  else ("blue" if np.abs(angle[1])<60 else "red") for angle in angle_list]
+        # # # roll
+        # color_list = ["green" if np.abs(angle[2])<60  else ("blue" if np.abs(angle[2])<120 else "red") for angle in angle_list]
         
-        plt.bar(list(range(2000)),NME_2D_68_list, color=color_list)
-        plt.title("Roll", fontsize=40)
+        # plt.bar(list(range(2000)),NME_2D_68_list, color=color_list)
+        # plt.title("Roll", fontsize=40)
         
-        colors = {'0~60':'green', '60~120':'blue', "120~180":"red"}         
-        labels = list(colors.keys())
-        handles = [plt.Rectangle((0,0),1,1, color=colors[label]) for label in labels]
-        plt.legend(handles, labels, fontsize=40)
+        # colors = {'0~60':'green', '60~120':'blue', "120~180":"red"}         
+        # labels = list(colors.keys())
+        # handles = [plt.Rectangle((0,0),1,1, color=colors[label]) for label in labels]
+        # plt.legend(handles, labels, fontsize=40)
         
-        plt.savefig("../Image/img_npy_3/NME_2D_68_roll.png")
+        # plt.savefig("../Image/img_npy_3/NME_2D_68_roll.png")
+
         
         
+        # # w means the worst!!
+        # w_name = Name_list[:48]
+        # w_set = [benchmark[benchmark.get_idx_by_name(name)] for name in w_name] # list(size,) of tuple(2,) of tensors(3,256,256)
+        # w_image, w_uvmap = zip(*w_set) # 2 list(size,) of tensor(3,256,256)
+        # w_image = torch.stack(w_image) # (size, 3, H, W)
+        # w_uvmap = torch.stack(w_uvmap) # (size, 3, H, W)
+        # w_set = torch.cat((w_image, w_uvmap), dim=1) # (size, 6, H, W)
         
+        # # == data process ==
+        # with torch.no_grad():
+        #     G_in = w_image.to(device)
+        #     G_out = G(G_in)
         
-        sys.exit()
+        # G_in = inverse_transform(G_in)
+        # G_GT = inverse_transform(w_uvmap) # GT: ground truth
+        # G_out = inverse_transform(G_out) # Go: Generator output
         
-        # w means the worst!!
-        w_name = Name_list[:48]
-        w_set = [benchmark[benchmark.get_idx_by_name(name)] for name in w_name] # list(size,) of tuple(2,) of tensors(3,256,256)
-        w_image, w_uvmap = zip(*w_set) # 2 list(size,) of tensor(3,256,256)
-        w_image = torch.stack(w_image) # (size, 3, H, W)
-        w_uvmap = torch.stack(w_uvmap) # (size, 3, H, W)
-        w_set = torch.cat((w_image, w_uvmap), dim=1) # (size, 6, H, W)
-        
-        # == data process ==
-        with torch.no_grad():
-            G_in = w_image.to(device)
-            G_out = G(G_in)
-        
-        G_in = inverse_transform(G_in)
-        G_GT = inverse_transform(w_uvmap) # GT: ground truth
-        G_out = inverse_transform(G_out) # Go: Generator output
-        
-        # == Export the grid of alignment from Generator and Ground Truth==
-        grid_of_alignment(G_in, G_out, uv_kpt_ind, "../Image/img_npy_5/worst_grid_by_GAN.jpg", angle_list = angle_list[:48],  error_list = NME_2D_68_list[:48], name_list=Name_list[:48])
-        grid_of_alignment(G_in, G_GT, uv_kpt_ind, "../Image/img_npy_5/worst_grid_of_GT.jpg", angle_list = angle_list[:48], name_list=Name_list[:48])
+        # # == Export the grid of alignment from Generator and Ground Truth==
+        # grid_of_alignment(G_in, G_out, uv_kpt_ind, "../Image/img_npy_4/worst_grid_by_GAN.jpg", angle_list = angle_list[:48],  error_list = NME_2D_68_list[:48], name_list=Name_list[:48])
+        # grid_of_alignment(G_in, G_GT, uv_kpt_ind, "../Image/img_npy_4/worst_grid_of_GT.jpg", angle_list = angle_list[:48], name_list=Name_list[:48])
         
         
         
 
-
+        
+        
         # How about fix the roll angle
         w_name = Name_list[:48]
         w_set = [benchmark[benchmark.get_idx_by_name(name)] for name in w_name] # list(size,) of tuple(2,) of tensors(3,256,256)
@@ -707,7 +710,7 @@ def main():
         
         w_image = inverse_transform(w_image)
         
-        NME_2D_68_list = []
+        NME_2D_68_fix_list = []
         for name, g_out, uvmap in zip(Name_list[:48], G_out, w_uvmap):
             G_out_68 = get_landmarks(g_out, uv_kpt_ind) # shape: (68,3)
             G_GT_68  = get_landmarks(uvmap, uv_kpt_ind) # shape: (68,3)
@@ -717,15 +720,15 @@ def main():
             
             normalization_factor = np.sqrt(np.prod(bbox[1] - bbox[0])) # sqrt of bbox area
             NME_2D_68 = L2_loss_2D_68/normalization_factor    
-            NME_2D_68_list.append(NME_2D_68)
+            NME_2D_68_fix_list.append(NME_2D_68)
             
-        grid_of_alignment(G_in, G_out, uv_kpt_ind, "../Image/img_npy_5/fix_roll_GAN.jpg", error_list = NME_2D_68_list)
-        grid_of_alignment(w_image, w_uvmap, uv_kpt_ind, "../Image/img_npy_5/fix_roll_GT.jpg")
+        # grid_of_alignment(G_in, G_out, uv_kpt_ind, "../Image/img_npy_4/fix_roll_GAN.jpg", error_list = NME_2D_68_fix_list)
+        # grid_of_alignment(w_image, w_uvmap, uv_kpt_ind, "../Image/img_npy_4/fix_roll_GT.jpg")
+        
+        print((sum(NME_2D_68_list[:48]) - sum(NME_2D_68_fix_list))/48)
         
         
         
-        
-        sys.exit()
         # # b means the best!!
         # b_name = Name_list[-48:]
         # b_set = [benchmark[benchmark.get_idx_by_name(name)] for name in b_name] # list(size,) of tuple(2,) of tensors(3,256,256)

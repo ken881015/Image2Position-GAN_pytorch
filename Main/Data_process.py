@@ -51,7 +51,7 @@ class I2P_train(Dataset):
             
             # roll_augments
             if np.abs(roll_angle) < 60: # check the roll angle range in [-30, 30]
-                if np.random.rand() < 0.25: # 30% change to be augmented
+                if np.random.rand() < 0.3: # 30% change to be augmented
                     img_w, img_h = image.size
                     angle = np.random.rand() * 120 # try to move the roll angle from [0,60] to [60, 180]
                     radian = np.deg2rad(angle)
@@ -66,9 +66,9 @@ class I2P_train(Dataset):
                     uvmap_npy = np.matmul(uvmap_npy, R)
                     uvmap_npy += np.array([img_w//2,img_h//2,0])
                     
-                if np.random.rand() < 0.5:
-                    image = image.transpose(Image.FLIP_LEFT_RIGHT)
-                    uvmap_npy[:,:,0] = 256 - 1 - uvmap_npy[:,:,0] 
+                # if np.random.rand() < 0.25:
+                #     image = image.transpose(Image.FLIP_LEFT_RIGHT)
+                #     uvmap_npy[:,:,0] = 256 - 1 - uvmap_npy[:,:,0] 
             
             
             
@@ -194,10 +194,12 @@ class RandomErase_wk:
             choose = np.random.uniform(0,1)
             
             c = torch.rand(size=(3,1,1)) * (self.v_h - self.v_l) + self.v_l
-            if choose < 0.5:
+            if choose < 0.4:
                 image = torch.where(mask>0, c, image)
-            else:
+            elif choose < 0.8:
                 image = torch.where(mask>0, image*c, image)
+            else:
+                image = torch.where(mask>0, image*0., image)
         
         return image
 
