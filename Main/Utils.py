@@ -172,7 +172,15 @@ def plot_landmarks_edge(kpts, ax=None):
         ax.plot(np.append(kpts[42:48,0], kpts[42,0]), np.append(kpts[42:48,1], kpts[42,1])) # left eye
         ax.plot(np.append(kpts[48:67,0], kpts[48,0]), np.append(kpts[48:67,1], kpts[48,1])) # lips
 
-def grid_of_alignment(G_in, pos_map, uv_kpt_ind, file_name, figsize=(15., 20.), nrows_ncols=(8, 6), angle_list = None, error_list = None, name_list = None):
+def grid_of_alignment(G_in,pos_map,uv_kpt_ind,file_name,
+                      figsize=(15., 20.),
+                      nrows_ncols=(8, 6),
+                      angle_list = None,
+                      error_list = None,
+                      name_list = None,
+                      bm_version = "ori"
+                      ):
+    
     fig = plt.figure(figsize=figsize)
     grid = ImageGrid(fig, 
                      111, 
@@ -186,7 +194,7 @@ def grid_of_alignment(G_in, pos_map, uv_kpt_ind, file_name, figsize=(15., 20.), 
         ax.get_yaxis().set_ticks([]); ax.get_xaxis().set_ticks([])
 
         # plt alignment
-        kpt = get_landmarks(pos_map[idx], uv_kpt_ind)
+        kpt = get_landmarks(pos_map[idx], uv_kpt_ind) if bm_version == "ori" else pos_map[idx]
         ax.scatter(kpt[:,0], kpt[:,1], s=1, c="r", label="GAN_output")
         plot_landmarks_edge(kpt, ax)
         
@@ -212,7 +220,7 @@ def grid_of_alignment(G_in, pos_map, uv_kpt_ind, file_name, figsize=(15., 20.), 
 #     return error_func
 #     pass
 
-def get_align68_losses(G, benchmark, inverse_transform, uv_kpt_ind, parent_dir):
+def get_align68_losses(G, benchmark, inverse_transform, uv_kpt_ind, parent_dir, bm_version="ori"):
     
     if not (os.path.isfile(os.path.join(parent_dir, "NME_3D_68.log")) \
        and  os.path.isfile(os.path.join(parent_dir, "NME_2D_68.log")) \
@@ -231,17 +239,24 @@ def get_align68_losses(G, benchmark, inverse_transform, uv_kpt_ind, parent_dir):
             for idx, (face_img, gt_pos) in enumerate(benchmark):
                 
                 G_in = torch.unsqueeze(face_img, dim=0)
-                G_GT = torch.unsqueeze(gt_pos, dim=0)
+                
                 G_out = G(G_in)
-                
                 G_out = inverse_transform(G_out)
-                G_GT = inverse_transform(G_GT)
-                
                 G_out = np.squeeze(G_out)
-                G_GT = np.squeeze(G_GT)
-                
                 G_out_68 = get_landmarks(G_out, uv_kpt_ind) # shape: (68,3)
-                G_GT_68  = get_landmarks(G_GT, uv_kpt_ind) # shape: (68,3)
+                
+                if bm_version == 'ori':
+                    G_GT = torch.unsqueeze(gt_pos, dim=0)
+                    G_GT = inverse_transform(G_GT)
+                    G_GT = np.squeeze(G_GT)
+                    G_GT_68  = get_landmarks(G_GT, uv_kpt_ind) # shape: (68,3)
+                
+                else :
+                    G_GT = gt_pos #! naming confused. because shape of "gt_pos" from reannotate version of benchmark is (2, 68)
+                    G_GT_68 = np.zeros((68,3), dtype=G_GT.dtype)
+                    G_GT_68[:,:2] = G_GT.T
+                
+                
                 
                 # z process
                 G_out_68[:, 2] = G_out_68[:, 2] - G_out_68[:, 2].mean()

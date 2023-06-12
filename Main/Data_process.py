@@ -51,7 +51,7 @@ class I2P_train(Dataset):
             
             # roll_augments
             if np.abs(roll_angle) < 60: # check the roll angle range in [-30, 30]
-                if np.random.rand() < 0.3: # 30% change to be augmented
+                if np.random.rand() < 0.1: # 10% change to be augmented
                     img_w, img_h = image.size
                     angle = np.random.rand() * 120 # try to move the roll angle from [0,60] to [60, 180]
                     radian = np.deg2rad(angle)
@@ -128,6 +128,60 @@ class I2P_bm(DatasetFolder):
     def get_idx_by_name(self, name):
         return self.sub_dir_list.index(name)
 
+# re = reannotate
+class I2P_bm_re(Dataset):
+    def __init__(self, in_dir, transform=None, target_transform=None):
+        
+        self.in_dir = in_dir
+        
+        with open(self.in_dir+'AFLW2000-3D_crop.list', 'r') as f:
+            self.fname_list = [line[:-5] for line in f] # get rid of '.jpg\n'
+            
+        self.gt_lmk = np.load(self.in_dir+"AFLW2000-3D-Reannotated.pts68.size256.npy")
+        
+        if transform is not None:
+            self.transform = transform
+        if target_transform is not None:
+            self.target_transform = target_transform
+            
+        self.data_num = self.gt_lmk.shape[0]
+        
+    def __getitem__(self, index):
+        if index > self.__len__():
+            raise Exception("Index out of range")
+        # else:
+        image = Image.open(self.in_dir + "AFLW2000-3D_crop_256/"+ self.fname_list[index]+"_cropped.jpg") # type : PIL
+        # Avoiding the file order in two dir are different
+        # uvmap = Image.open(self.uvmaps_dir + os.listdir(self.images_dir)[index].replace('.','_posmap.'))
+        
+        npy = self.gt_lmk[index] # shape (2,68)
+        
+        if self.transform is not None:
+            image = self.transform(image)
+        
+        # if self.target_transform is not None:
+        #     npy = self.target_transform(npy)
+
+        return image, npy
+    
+    def __len__(self):
+        return self.data_num
+    
+    def __get_name_bbox_kpt__(self, index):
+        if index > self.__len__():
+            raise Exception("Index out of range")
+        
+        name = self.fname_list[index]
+        kpt = self.gt_lmk[index]
+        minx, maxx = np.min(kpt[0, :]), np.max(kpt[0, :])
+        miny, maxy = np.min(kpt[1, :]), np.max(kpt[1, :])
+        bbox = np.array([[minx, miny],[maxx, maxy]])
+        
+        return name, bbox, kpt
+    
+    def get_idx_by_name(self, name):
+        return self.fname_list.index(name)
+
 class CelebA(DatasetFolder):
     def __init__(self, in_dir, transform=None, target_transform=None):
         
@@ -194,12 +248,10 @@ class RandomErase_wk:
             choose = np.random.uniform(0,1)
             
             c = torch.rand(size=(3,1,1)) * (self.v_h - self.v_l) + self.v_l
-            if choose < 0.4:
+            if choose < 0.5:
                 image = torch.where(mask>0, c, image)
-            elif choose < 0.8:
-                image = torch.where(mask>0, image*c, image)
             else:
-                image = torch.where(mask>0, image*0., image)
+                image = torch.where(mask>0, image*c, image)
         
         return image
 
@@ -224,8 +276,8 @@ class rotate_PIL_wk:
         return rotated_pil_img
 
 if __name__ == '__main__':
-    # dataset = I2P_train("/home/vlsilab/Dataset/Img2Pos_train/")
-    # image, npy = dataset[0]
+    dataset = I2P_train("/home/vlsilab/Dataset/Img2Pos_train/")
+    image, npy = dataset[0]
     # npy = np.load("./AFW_134212_1_0_angle.npy")
     # benchmark = I2P_bm("/home/vlsilab/Dataset/Img2Pos_test/AFLW2000_all-crop/")
 
@@ -256,14 +308,20 @@ if __name__ == '__main__':
     
     # rotated_image = image.rotate(angle)
     
-    image = plt.imread("./image03871.jpg")
-    kpt = sio.loadmat("./image03871.mat")["pt3d_68"][:2,:].T
-    print(kpt.shape)
+    image = image.transpose(Image.FLIP_LEFT_RIGHT)
+    a_npy = 256 - 1 - npy[:,:,0] 
+    b_npy = (npy[:,:,0] - 128) * (-1) + 128
     
+    print((a_npy == b_npy).all())
+        
+    # image = plt.imread("./image03871.jpg")
+    # kpt = sio.loadmat("./image03871.mat")["pt3d_68"][:2,:].T
+    # print(kpt.shape)
+    sys.exit()
     fig, ax = plt.subplots(figsize=(10,10))
     ax.imshow(image)
     ax.get_yaxis().set_ticks([]); ax.get_xaxis().set_ticks([])
-    # ax.scatter(npy[:,:,0], npy[:,:,1])
-    plot_landmarks_edge(kpt, ax)
+    ax.scatter(npy[::10,::10,0], npy[::10,::10,1])
+    # plot_landmarks_edge(kpt, ax)
     
     plt.savefig("align_by_uvmap.png")

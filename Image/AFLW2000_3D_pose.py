@@ -37,13 +37,22 @@ for name, angle in zip(name_list, angle_list):
         angle[2] -= 360 * np.sign(angle[2])
         # print("upt:", name, angle)
     
-    if np.abs(angle[1]) < 110 and np.abs(angle[1]) > 70:
-        print(name, angle)
+    # if np.abs(angle[1]) < 110 and np.abs(angle[1]) > 70:
+    #     print(name, angle)
 
-fname_with_angle = list(zip(name_list, angle_list))
+
 
 # sorted by file name idx
+fname_with_angle = list(zip(name_list, angle_list))
 fname_with_angle = sorted(fname_with_angle, key = lambda x: int(x[0][5:]))
+
+cnt = 0
+
+for i in range(2000):
+    if np.abs(angle_list[i,2]) < 165:
+        cnt += 1
+
+print(cnt)
 
 # with open("../Main/AFLW2000-3D_fname_pose_gimbal_lock", "wb") as fp:
 #     pickle.dump(fname_with_angle, fp)
