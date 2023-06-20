@@ -49,9 +49,16 @@ I sort the NME from largest to smallest and paint each bar according to angle to
 
 ### Top 48 best of alignment
 - Left: Ground Truth; Right: Generator
-![](./README_img/180b.JPG)
+  - frontal face is  piece of cake.
+    ![](./README_img/180b.JPG)
 ### Top 48 worst of alignment
 - Left: Ground Truth; Right: Generator
-![](./README_img/180w.JPG)
+  - Large pose and rotate augment is challenging
+    ![](./README_img/180w.JPG)
+
+  - Being curious, I rotate Image according to the **roll angle** offered in dataset, making them back to frontal face (However, some of them become more crooked, I think gimbal lock is the reason of unreasonable outcome. order: pitch->yaw->roll)
+    ![](./README_img/180f.JPG)
+    - Improved percentage of the worst 48 imgs: 1.18%
+    - 32/48 is getting better.
 
 ## How to use?
