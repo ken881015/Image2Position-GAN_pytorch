@@ -4,9 +4,9 @@ python train_GAN.py \
         --input_dir "/home/vlsilab/Dataset/Img2Pos_train/" \
         --bchm_dir "/home/vlsilab/Dataset/Img2Pos_test/AFLW2000_all-crop/" \
         \
-        --ckpt_dir "../Log/GAN_training_log/img_npy_7/ckpt/" \
-        --img_dir "../Log/GAN_training_log/img_npy_7/img/" \
-        --tblog_dir "../Log/GAN_training_log/img_npy_7/tblog/" \
+        --ckpt_dir "../Log/GAN_training_log/img_npy_6/ckpt/" \
+        --img_dir "../Log/GAN_training_log/img_npy_6/img/" \
+        --tblog_dir "../Log/GAN_training_log/img_npy_6/tblog/" \
         \
         --ngf 64 \
         --ndf 64 \

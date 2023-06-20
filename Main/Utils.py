@@ -211,7 +211,7 @@ def grid_of_alignment(G_in,pos_map,uv_kpt_ind,file_name,
         
         # show angle
         if angle_list is not None:
-            if type(angle_list[idx]) is tuple: 
+            if type(angle_list[idx]) is np.ndarray: 
                 ax.text(0,255.5,f"p:{int(angle_list[idx][0])}, y:{int(angle_list[idx][1])}, r:{int(angle_list[idx][2])}", color='red', fontweight="bold")
             else:
                 ax.text(0,255.5,f"r:{int(angle_list[idx])}", color='red', fontweight="bold")
@@ -388,7 +388,7 @@ def angle_error_analysis(NME_2D_68_list, angle_list):
         print(f"Mean: {(l[0]/dict[c][2][0] + l[1]/dict[c][2][1] + l[2]/dict[c][2][2])*100/3:.2f}%")
         print(f"Total Mean: {(l[0] + l[1] + l[2])/2000*100:.2f}%")
         
-        print(f"max: {np.max(angle_list[:,dict[c][0]])}, min: {np.min(angle_list[:,dict[c][0]])}")
+        # print(f"max: {np.max(angle_list[:,dict[c][0]])}, min: {np.min(angle_list[:,dict[c][0]])}")
         
         
         # print(f"Covariance of {c} and error is: {cov(NME_2D_68_list, angle_list, dict, c)}")
@@ -399,16 +399,16 @@ def angle_error_analysis(NME_2D_68_list, angle_list):
         # plt.savefig(f"../Image/img_npy_6/angle_{c}_with_error.png")
         
         
-        plt.figure(figsize=(50,20))
+        # plt.figure(figsize=(50,20))
     
-        plt.bar(list(range(2000)),NME_2D_68_list, color=color_list)
-        plt.title(c, fontsize=40)
+        # plt.bar(list(range(2000)),NME_2D_68_list, color=color_list)
+        # plt.title(c, fontsize=40)
     
-        colors = {f'0~{dict[c][1][0]}':'green', f'{dict[c][1][0]}~{dict[c][1][1]}':'blue', f'{dict[c][1][1]}~{dict[c][1][2]}':'red'}         
-        labels = list(colors.keys())
-        handles = [plt.Rectangle((0,0),1,1, color=colors[label]) for label in labels]
-        plt.legend(handles, labels, fontsize=40)
+        # colors = {f'0~{dict[c][1][0]}':'green', f'{dict[c][1][0]}~{dict[c][1][1]}':'blue', f'{dict[c][1][1]}~{dict[c][1][2]}':'red'}         
+        # labels = list(colors.keys())
+        # handles = [plt.Rectangle((0,0),1,1, color=colors[label]) for label in labels]
+        # plt.legend(handles, labels, fontsize=40)
     
-        plt.savefig(f"../Image/img_npy_6/NME_2D_68_{c}.png")
-        logging.info(f"../Image/img_npy_6/NME_2D_68_{c}.png saved!")
-        print("="*20)
+        # plt.savefig(f"../Image/img_npy_6/NME_2D_68_{c}.png")
+        # logging.info(f"../Image/img_npy_6/NME_2D_68_{c}.png saved!")
+        # print("="*20)
