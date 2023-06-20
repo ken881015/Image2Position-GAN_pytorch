@@ -7,8 +7,10 @@ import torch
 import torch.nn as nn
 from torch.optim import Adam, lr_scheduler
 from torch.utils.data import Dataset, DataLoader
+import torch.backends.cudnn as cudnn
 import torchvision.transforms as transforms
 import torchvision
+from PIL import Image
 import argparse
 import logging
 import json
@@ -96,6 +98,7 @@ def train(G,D,OptimG, OptimD, SchedulerG, SchedulerD, ckpt, dataloader, criterio
     # ==Device configuration==
     device_id = ",".join(str(num) for num in args.device_id)
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    cudnn.benchmark = True if torch.cuda.is_available() else False
     
     # ==TensorBoard==
     writer = SummaryWriter(args.tblog_dir)
@@ -146,8 +149,8 @@ def train(G,D,OptimG, OptimD, SchedulerG, SchedulerD, ckpt, dataloader, criterio
             # ===================== training G =====================
             OptimG.module.zero_grad()
             
-            G_in = image.to(device)
-            G_GT = uvmap.to(device) # generator's ground truth
+            G_in = image.to(device, non_blocking=True)
+            G_GT = uvmap.to(device, non_blocking=True) # generator's ground truth
             
             G_out = G(G_in)
             
@@ -383,7 +386,7 @@ def main():
     dataset = I2P_train(args.input_dir, transform=transform, target_transform=target_transform)
     benchmark = I2P_bm(args.bchm_dir, transform=transform, target_transform=target_transform)
     
-    dataloader = DataLoader(dataset, batch_size=args.batch_size*len(args.device_id), shuffle=True, drop_last=True, num_workers=4)
+    dataloader = DataLoader(dataset, batch_size=args.batch_size*len(args.device_id), shuffle=True, pin_memory=True, drop_last=True, num_workers=4)
     
     np.random.seed(args.seed)
     validate_idx = np.random.choice(len(benchmark), size=args.batch_size*len(args.device_id), replace=False)
@@ -401,6 +404,7 @@ def main():
         # ==Device configuration==
         device_id = ",".join(str(num) for num in args.device_id)
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        cudnn.benchmark = True if torch.cuda.is_available() else False
         logging.info("Device: " + str(device))
         
         # == face weighted mask
@@ -451,12 +455,13 @@ def main():
     
     elif args.mode == "export":
         
+        
         # benchmark modify
         if args.bm_version == "re":
             in_dir = "/home/vlsilab/Dataset/aflw2000_data/wk_256/"
             benchmark = I2P_bm_re(in_dir, transform)
         
-        # == load trained model G ==
+        # == Device setting ==
         device = torch.device("cpu")
         logging.info("Device: cpu")
         
@@ -464,105 +469,113 @@ def main():
         #! Original data, is (y, x) instead of (x, y)
         uv_kpt_ind = np.loadtxt('../Image/uv_kpt_ind.txt').astype(np.int32) # 2 x 68 get kpt
         
-        # ==loop for ckpt benchnmarking==
-        for i in [29]:
-            
+        # # # ==loop for ckpt benchnmarking==
+        path = f'../Log/GAN_training_log/img_npy_7/Benchmark_{args.bm_version}_NME_per_10epochs.log'
+        
+        for i in range(28,30):
+            f = open(path, 'a')
             i = int((i+1)*10)
-            ckpt = torch.load(f"../Log/GAN_training_log/img_npy_4/ckpt/ckpt_epoch_{i:03d}.pth", map_location=device)
+            ckpt = torch.load(f"../Log/GAN_training_log/img_npy_7/ckpt/ckpt_epoch_{i:03d}.pth", map_location=device)
             
             G = Generator(in_channels=3 ,args= args).to(device)
             G.load_state_dict(ckpt["Generator"])
             G.to(device)
             G.eval()
             
-            subprocess.run(["rm", "../Log/GAN_training_log/img_npy_4/Name.log"])
-            subprocess.run(["rm", "../Log/GAN_training_log/img_npy_4/NME_2D_68.log"])
-            subprocess.run(["rm", "../Log/GAN_training_log/img_npy_4/NME_3D_68.log"])
+            subprocess.run(["rm", "../Log/GAN_training_log/img_npy_7/Name.log"])
+            subprocess.run(["rm", "../Log/GAN_training_log/img_npy_7/NME_2D_68.log"])
+            subprocess.run(["rm", "../Log/GAN_training_log/img_npy_7/NME_3D_68.log"])
             
             Name_list, NME_2D_68_list, NME_3D_68_list = get_align68_losses(G, benchmark, inverse_transform, uv_kpt_ind, parent_dir, bm_version=args.bm_version)
         
             # print(f"NME_3D_68 Error: Mean:{np.mean(NME_3D_68_list)*100:.3f}%, Var:{np.var(NME_3D_68_list):.5f}")
             print(f"NME_2D_68 Error: Mean:{np.mean(NME_2D_68_list)*100:.3f}%, Var:{np.var(NME_2D_68_list):.5f}")
-    
+            f.writelines(f"{np.mean(NME_2D_68_list)*100:.6f}\n")
+            f.close()
             continue
         
-        #     # sorted by NME 2d error from high to low
-        #     assemble = list(zip(Name_list, NME_2D_68_list)) # pitch yaw roll
-        #     assemble = sorted(assemble, key= lambda x: np.abs(x[1]), reverse=True)
-        #     Name_list, NME_2D_68_list = zip(*assemble)
+            # sorted by NME 2d error from high to low
+            assemble = list(zip(Name_list, NME_2D_68_list)) # pitch yaw roll
+            assemble = sorted(assemble, key= lambda x: np.abs(x[1]), reverse=True)
+            Name_list, NME_2D_68_list = zip(*assemble)
             
-        #     # w means the worst!!
-        #     w_name = Name_list[:48]
-        #     w_set = [benchmark[benchmark.get_idx_by_name(name)] for name in w_name] # list(size,) of tuple(2,) of tensors(3,256,256)
-        #     w_image, w_uvmap = zip(*w_set) # 2 list(size,) of tensor(3,256,256)
-        #     w_image = torch.stack(w_image) # (size, 3, H, W)
-        #     w_uvmap = torch.stack(w_uvmap) if args.bm_version == "ori" else np.transpose(np.stack(w_uvmap, axis=0), (0,2,1)) # (size, 3, H, W)  or (size, 68, 2)
-        #     # w_set = torch.cat((w_image, w_uvmap), dim=1) # (size, 6, H, W)
+            # w means the worst!!
+            w_name = Name_list[:48]
+            w_set = [benchmark[benchmark.get_idx_by_name(name)] for name in w_name] # list(size,) of tuple(2,) of tensors(3,256,256)
+            w_image, w_uvmap = zip(*w_set) # 2 list(size,) of tensor(3,256,256)
+            w_image = torch.stack(w_image) # (size, 3, H, W)
+            w_uvmap = torch.stack(w_uvmap) if args.bm_version == "ori" else np.transpose(np.stack(w_uvmap, axis=0), (0,2,1)) # (size, 3, H, W)  or (size, 68, 2)
+            # w_set = torch.cat((w_image, w_uvmap), dim=1) # (size, 6, H, W)
             
-        #     # == data process ==
-        #     with torch.no_grad():
-        #         G_in = w_image.to(device)
-        #         G_out = G(G_in)
+            # == data process ==
+            with torch.no_grad():
+                G_in = w_image.to(device)
+                G_out = G(G_in)
             
-        #     G_in = inverse_transform(G_in)
-        #     G_out = inverse_transform(G_out) # Go: Generator output
-        #     G_GT = inverse_transform(w_uvmap) if args.bm_version == "ori" else w_uvmap # GT: ground truth
+            G_in = inverse_transform(G_in)
+            G_out = inverse_transform(G_out) # Go: Generator output
+            G_GT = inverse_transform(w_uvmap) if args.bm_version == "ori" else w_uvmap # GT: ground truth
             
-        #     # == Export the grid of alignment from Generator and Ground Truth==
-        #     grid_of_alignment(G_in, G_out, uv_kpt_ind, f"../Image/img_npy_4/worst_GAN_epoch{i}.jpg",  error_list = NME_2D_68_list[:48])
-        #     grid_of_alignment(G_in, G_GT, uv_kpt_ind, f"../Image/img_npy_4/worst_GT_epoch{i}.jpg", bm_version=args.bm_version)
-        
-        
+            # == Export the grid of alignment from Generator and Ground Truth==
+            grid_of_alignment(G_in, G_out, uv_kpt_ind, f"../Image/img_npy_7/worst_GAN_epoch{i}.jpg",  error_list = NME_2D_68_list[:48])
+            grid_of_alignment(G_in, G_GT, uv_kpt_ind, f"../Image/img_npy_7/worst_GT_epoch{i}.jpg", bm_version=args.bm_version)
+
         sys.exit()
         
         
         # ckpt = load_newest_ckpt(args.ckpt_dir, device)
-        ckpt = torch.load("../Log/GAN_training_log/img_npy_4/ckpt/ckpt_epoch_230.pth", map_location=device)
+        ckpt = torch.load("../Log/GAN_training_log/img_npy_6/ckpt/ckpt_epoch_180.pth", map_location=device)
         
         G = Generator(in_channels=3 ,args= args).to(device)
         G.load_state_dict(ckpt["Generator"])
         G.to(device)
         G.eval()
         
-        D = Discriminator(in_channels=3*2 ,args= args).to(device)
-        D.load_state_dict(ckpt["Discriminator"])
-        D.to(device)
-        D.eval()
+        # D = Discriminator(in_channels=3*2 ,args= args).to(device)
+        # D.load_state_dict(ckpt["Discriminator"])
+        # D.to(device)
+        # D.eval()
+        
+        # # model parameters
+        # print("G's trainable param:",count_parameters(G))
+        # print("D's trainable param:",count_parameters(D))
+        
+        # sys.exit(0)
         
         
         
-        # == data process ==
-        with torch.no_grad():
-            G_in = v_image.to(device)
-            G_out = G(G_in)
+        # # == data process ==
+        # with torch.no_grad():
+        #     G_in = v_image.to(device)
+        #     G_out = G(G_in)
         
-        G_in = inverse_transform(G_in)
-        G_GT = inverse_transform(v_uvmap) # GT: ground truth
-        G_out = inverse_transform(G_out) # Go: Generator output
+        # G_in = inverse_transform(G_in)
+        # G_GT = inverse_transform(v_uvmap) # GT: ground truth
+        # G_out = inverse_transform(G_out) # Go: Generator output
         
-        # check the value of range between GT and Gout
-        print("the value range of G_GT is :", np.max(G_GT), np.min(G_GT)) 
-        print("the value range of G_out is :", np.max(G_out), np.min(G_out))
+        # # check the value of range between GT and Gout
+        # print("the value range of G_GT is :", np.max(G_GT), np.min(G_GT)) 
+        # print("the value range of G_out is :", np.max(G_out), np.min(G_out))
         
-        # == Export the grid of alignment from Generator and Ground Truth==
-        os.makedirs("../Image/img_npy_4", exist_ok=True)
-        grid_of_alignment(G_in, G_out, uv_kpt_ind, "../Image/img_npy_4/GAN_bm_ori_random.jpg")
-        grid_of_alignment(G_in, G_GT, uv_kpt_ind, "../Image/img_npy_4/GT_bm_ori_random.jpg")
+        # # == Export the grid of alignment from Generator and Ground Truth==
+        # os.makedirs("../Image/img_npy_7", exist_ok=True)
+        # grid_of_alignment(G_in, G_out, uv_kpt_ind, "../Image/img_npy_7/GAN_bm_ori_random.jpg")
+        # grid_of_alignment(G_in, G_GT, uv_kpt_ind, "../Image/img_npy_7/GT_bm_ori_random.jpg")
         
         # == Calculate the NME and statistic of CDE ==
-        if args.bm_version == 'ori':
-            logging.info(f"Calculating the reconstruction error of img+GTpos")
-            test_img_with_GTpos_losses = get_dataset_losses(D, criterion, benchmark, os.path.join(parent_dir,"test_img_with_GTpos.log"), device)
+        # if args.bm_version == 'ori':
+        #     logging.info(f"Calculating the reconstruction error of img+GTpos")
+        #     test_img_with_GTpos_losses = get_dataset_losses(D, criterion, benchmark, os.path.join(parent_dir,"test_img_with_GTpos.log"), device)
             
-            logging.info(f"Calculating the reconstruction error of img+Goutpos")
-            test_img_with_Goutpos_losses = get_dataset_losses(D, criterion, benchmark, os.path.join(parent_dir,"test_img_with_Goutpos.log"), device, G=G)
+        #     logging.info(f"Calculating the reconstruction error of img+Goutpos")
+        #     test_img_with_Goutpos_losses = get_dataset_losses(D, criterion, benchmark, os.path.join(parent_dir,"test_img_with_Goutpos.log"), device, G=G)
 
-            print(f"Reconstruction Error of GTpos: Mean:{np.mean(test_img_with_GTpos_losses):.6f}, Variance:{np.var(test_img_with_GTpos_losses):.8f}")
-            print(f"Reconstruction Error of Gopos: Mean:{np.mean(test_img_with_Goutpos_losses):.6f}, Variance:{np.var(test_img_with_Goutpos_losses):.8f}")
+        #     print(f"Reconstruction Error of GTpos: Mean:{np.mean(test_img_with_GTpos_losses):.6f}, Variance:{np.var(test_img_with_GTpos_losses):.8f}")
+        #     print(f"Reconstruction Error of Gopos: Mean:{np.mean(test_img_with_Goutpos_losses):.6f}, Variance:{np.var(test_img_with_Goutpos_losses):.8f}")
         
         # == calculate the NME of each validation data in benchmark dataset
         #! already sorted by name!!!
-        Name_list, NME_2D_68_list, NME_3D_68_list = get_align68_losses(G, benchmark, inverse_transform, uv_kpt_ind, "../Log/GAN_training_log/img_npy_4/", bm_version=args.bm_version)
+        Name_list, NME_2D_68_list, NME_3D_68_list = get_align68_losses(G, benchmark, inverse_transform, uv_kpt_ind, "../Log/GAN_training_log/img_npy_6/", bm_version=args.bm_version)
         
         # == Analysis of alignment error
         with open("./AFLW2000-3D_fname_pose_gimbal_lock", 'rb')as fp:
@@ -575,15 +588,13 @@ def main():
         
         
         
-    
+
         # sorted by NME 2d error from high to low (you can alter "key" below for the order you want)
         assemble = list(zip(Name_list, NME_2D_68_list, angle_list)) # pitch yaw roll
         assemble = sorted(assemble, key= lambda x: np.abs(x[1]), reverse=True)
         Name_list, NME_2D_68_list, angle_list = zip(*assemble)
         
-        Name_list = list(Name_list)
-        NME_2D_68_list = list(NME_2D_68_list)
-        angle_list = list(angle_list)
+        Name_list,NME_2D_68_list,angle_list = np.array(Name_list),np.array(NME_2D_68_list),np.array(angle_list)
         
         # # avoid some bad benchmark
         # avoid_list = ["image03871", "image03101"]
@@ -596,70 +607,8 @@ def main():
         
         print(f"NME_3D_68 Error: Mean:{np.mean(NME_3D_68_list)*100:.3f}%, Var:{np.var(NME_3D_68_list):.3f}")
         print(f"NME_2D_68 Error: Mean:{np.mean(NME_2D_68_list)*100:.3f}%, Var:{np.var(NME_2D_68_list):.3f}")
-    
-
-        # == Analysis ==
-        ## gimbol lock + roll 0~60~120~180
-        # AFLW2000_3D_pitch = np.array([1814, 128,  58,])
-        # AFLW2000_3D_yaw = np.array([1313, 383, 304,])
-        # AFLW2000_3D_roll = np.array([1931, 60, 9,])
         
-        ## == statistic by zy ==
-        # AFLW2000_3D_pitch = np.array([1813, 126, 61])
-        # AFLW2000_3D_yaw = np.array([1312, 383, 305])
-        # AFLW2000_3D_roll = np.array([1745, 184, 71])
-        
-        ## gimbol lock
-        # AFLW2000_3D_pitch = np.array([1814, 128,  58,])
-        # AFLW2000_3D_yaw = np.array([1313, 383, 304,])
-        # AFLW2000_3D_roll = np.array([1746, 185,  69,])
-        
-        dict = {
-            "pitch": (0, [30, 60, 90] , [1814, 128,  58,]),
-            "yaw"  : (1, [30, 60, 90] , [1313, 383, 304] ),
-            'roll' : (2, [60, 120, 180], [1931, 60, 9,]   )
-        }
-        
-        choose = dict.keys()
-        
-        for c in choose:
-            l = [0.,0.,0.]
-            color_list = []
-            
-            for error,angle in zip(NME_2D_68_list, angle_list):
-                if np.abs(angle[dict[c][0]]) < dict[c][1][0]:
-                    color_list.append("green")
-                    l[0] += error
-                elif np.abs(angle[dict[c][0]]) < dict[c][1][1]:
-                    color_list.append("blue")
-                    l[1] += error
-                else:
-                    color_list.append("red")
-                    l[2] += error
-            
-            print(f"=={c}==")
-            print(f"{0:03d}~{dict[c][1][0]:03d}:{l[0]/dict[c][2][0]*100:.2f}%")
-            print(f"{dict[c][1][0]:03d}~{dict[c][1][1]:03d}:{l[1]/dict[c][2][1]*100:.2f}%")
-            print(f"{dict[c][1][1]:03d}~{dict[c][1][2]:03d}:{l[2]/dict[c][2][2]*100:.2f}%")
-            
-            print(f"Mean: {(l[0]/dict[c][2][0] + l[1]/dict[c][2][1] + l[2]/dict[c][2][2])*100/3:.2f}%")
-            print(f"Total Mean: {(l[0] + l[1] + l[2])/2000*100:.2f}%")
-            print("="*20)
-    
-        
-            fig = plt.figure(figsize=(50,20))
-        
-        
-            plt.bar(list(range(2000)),NME_2D_68_list, color=color_list)
-            plt.title(c, fontsize=40)
-        
-            colors = {f'0~{dict[c][1][0]}':'green', f'{dict[c][1][0]}~{dict[c][1][1]}':'blue', f'{dict[c][1][1]}~{dict[c][1][2]}':'red'}         
-            labels = list(colors.keys())
-            handles = [plt.Rectangle((0,0),1,1, color=colors[label]) for label in labels]
-            plt.legend(handles, labels, fontsize=40)
-        
-            plt.savefig(f"../Image/img_npy_4/NME_2D_68_{c}.png")
-
+        # angle_error_analysis(NME_2D_68_list, angle_list)
         
         # # w means the worst!!
         # w_name = Name_list[:48]
@@ -679,60 +628,155 @@ def main():
         # G_out = inverse_transform(G_out) # Go: Generator output
         
         # # == Export the grid of alignment from Generator and Ground Truth==
-        # grid_of_alignment(G_in, G_out, uv_kpt_ind, "../Image/img_npy_4/worst_grid_by_GAN.jpg", angle_list = angle_list[:48],  error_list = NME_2D_68_list[:48], name_list=Name_list[:48])
-        # grid_of_alignment(G_in, G_GT, uv_kpt_ind, "../Image/img_npy_4/worst_grid_of_GT.jpg", angle_list = angle_list[:48], name_list=Name_list[:48], bm_version=args.bm_version)
-        
-        
-        
+        # grid_of_alignment(G_in, G_out, uv_kpt_ind, "../Image/img_npy_7/worst_grid_by_GAN.jpg", angle_list = angle_list[:48],  error_list = NME_2D_68_list[:48], name_list=Name_list[:48])
+        # grid_of_alignment(G_in, G_GT, uv_kpt_ind, "../Image/img_npy_7/worst_grid_of_GT.jpg", angle_list = angle_list[:48], name_list=Name_list[:48], bm_version=args.bm_version)
 
         
         
-        # How about fix the roll angle
-        w_name = Name_list[:48]
-        w_set = [benchmark[benchmark.get_idx_by_name(name)] for name in w_name] # list(size,) of tuple(2,) of tensors(3,256,256)
         
-        _, w_uvmap = zip(*w_set) # 2 list(size,) of tensor(3,256,256)
         
-        w_uvmap = torch.stack(w_uvmap)
-        w_uvmap = inverse_transform(w_uvmap)
+        # ####### How about fix the roll angle (top worst 48) ######
+        # num = 48
+        # w_name = [Name_list[i] for i in range(num)]
+        # w_set = [benchmark[benchmark.get_idx_by_name(name)] for name in w_name] # list(size,) of tuple(2,) of tensors(3,256,256)
         
-        def rotmatrix(radian):
-            R = np.array([
-                [np.cos(radian), np.sin(-radian), 0],
-                [np.sin(radian),  np.cos(radian), 0],
-                [             0,               0, 1]
-            ])
-            return R
+        # _, w_uvmap = zip(*w_set) # 2 list(size,) of tensor(3,256,256)
         
-        w_uvmap = [np.matmul((w_uvm - np.array([128,128,0])),rotmatrix(np.deg2rad(angle[2]))) + np.array([128,128,0]) for w_uvm, angle in zip(w_uvmap, angle_list[:48])]
+        # w_uvmap = torch.stack(w_uvmap)
+        # w_uvmap = inverse_transform(w_uvmap)
         
-        w_image = [Image.open("/home/vlsilab/Dataset/Img2Pos_test/AFLW2000_all-crop/" + os.path.join(name,name) + "_cropped.jpg") for name in w_name]
-        w_image = [transform(w_img.rotate(angle[2])) for w_img , angle in zip(w_image, angle_list[:48])]
-        w_image = torch.stack(w_image)
+        # w_uvmap = [np.matmul((w_uvm - np.array([128,128,0])),rotmatrix(np.deg2rad(angle[2]))) + np.array([128,128,0]) for w_uvm, angle in zip(w_uvmap, angle_list[:48])]
         
-        G_in = w_image
-        G_out = G(G_in)
-        G_in = inverse_transform(G_in)
-        G_out = inverse_transform(G_out)
+        # w_image = [Image.open("/home/vlsilab/Dataset/Img2Pos_test/AFLW2000_all-crop/" + os.path.join(name,name) + "_cropped.jpg") for name in w_name]
+        # w_image = [transform(w_img.rotate(angle[2])) for w_img , angle in zip(w_image, angle_list[:num])]
+        # w_image = torch.stack(w_image)
         
-        w_image = inverse_transform(w_image)
+        # G_in = w_image
+        # G_out = G(G_in)
+        # G_in = inverse_transform(G_in)
+        # G_out = inverse_transform(G_out)
         
+        # w_image = inverse_transform(w_image)
+        
+        # NME_2D_68_fix_list = []
+        # for name, g_out, uvmap in zip(Name_list[:num], G_out, w_uvmap):
+        #     G_out_68 = get_landmarks(g_out, uv_kpt_ind) # shape: (68,3)
+        #     G_GT_68  = get_landmarks(uvmap, uv_kpt_ind) # shape: (68,3)
+        #     L2_loss_2D_68 = np.mean(np.sqrt(np.sum(np.square(G_out_68[:,:2] - G_GT_68[:,:2]), axis=1)))
+
+        #     _, bbox, _ = benchmark.__get_name_bbox_kpt__(benchmark.get_idx_by_name(name))
+            
+        #     normalization_factor = np.sqrt(np.prod(bbox[1] - bbox[0])) # sqrt of bbox area
+        #     NME_2D_68 = L2_loss_2D_68/normalization_factor    
+        #     NME_2D_68_fix_list.append(NME_2D_68)
+            
+        # grid_of_alignment(G_in, G_out, uv_kpt_ind, "../Image/img_npy_6/fix_roll_GAN.jpg", error_list = NME_2D_68_fix_list)
+        # grid_of_alignment(w_image, w_uvmap, uv_kpt_ind, "../Image/img_npy_6/fix_roll_GT.jpg")
+        
+        # print(f"improvment percentage:{(sum(NME_2D_68_list[:num]) - sum(NME_2D_68_fix_list))/len(NME_2D_68_fix_list)*100:.2f}%")
+        
+        
+        
+        
+        ####### How about fix the roll angle (2000 all) ######
         NME_2D_68_fix_list = []
-        for name, g_out, uvmap in zip(Name_list[:48], G_out, w_uvmap):
-            G_out_68 = get_landmarks(g_out, uv_kpt_ind) # shape: (68,3)
-            G_GT_68  = get_landmarks(uvmap, uv_kpt_ind) # shape: (68,3)
+        num = 1000
+        for i in range(num):
+            _, uvmap = benchmark[benchmark.get_idx_by_name(Name_list[i])]
+            
+            uvmap = torch.unsqueeze(uvmap, dim=0)
+            uvmap = inverse_transform(uvmap)
+            uvmap = np.matmul((uvmap - np.array([128,128,0])),rotmatrix(np.deg2rad(angle_list[i][2]))) + np.array([128,128,0])
+        
+            image = Image.open("/home/vlsilab/Dataset/Img2Pos_test/AFLW2000_all-crop/" + os.path.join(Name_list[i],Name_list[i]) + "_cropped.jpg")
+            image = transform(image.rotate(angle_list[i][2]))
+            image = torch.unsqueeze(image, dim=0)
+        
+            G_in = image
+            G_out = G(G_in)
+            G_in = inverse_transform(G_in)
+            G_out = inverse_transform(G_out)
+        
+            image = inverse_transform(image)
+        
+            G_out_68 = get_landmarks(G_out.squeeze(), uv_kpt_ind) # shape: (68,3)
+            G_GT_68  = get_landmarks(uvmap.squeeze(), uv_kpt_ind) # shape: (68,3)
             L2_loss_2D_68 = np.mean(np.sqrt(np.sum(np.square(G_out_68[:,:2] - G_GT_68[:,:2]), axis=1)))
 
-            _, bbox, _ = benchmark.__get_name_bbox_kpt__(benchmark.get_idx_by_name(name))
+            _, bbox, _ = benchmark.__get_name_bbox_kpt__(benchmark.get_idx_by_name(Name_list[i]))
             
             normalization_factor = np.sqrt(np.prod(bbox[1] - bbox[0])) # sqrt of bbox area
             NME_2D_68 = L2_loss_2D_68/normalization_factor    
             NME_2D_68_fix_list.append(NME_2D_68)
-            
-        grid_of_alignment(G_in, G_out, uv_kpt_ind, "../Image/img_npy_4/fix_roll_GAN.jpg", error_list = NME_2D_68_fix_list)
-        grid_of_alignment(w_image, w_uvmap, uv_kpt_ind, "../Image/img_npy_4/fix_roll_GT.jpg")
         
-        print(f"improvment percentage:{(sum(NME_2D_68_list[:48]) - sum(NME_2D_68_fix_list))/len(NME_2D_68_fix_list)*100:.2f}%")
+        print(f"improvment percentage:{(sum(NME_2D_68_list) - sum(NME_2D_68_fix_list))/len(NME_2D_68_fix_list)*100:.2f}%")
+        print(f"After fixing: Mean:{np.mean(NME_2D_68_fix_list)*100:.3f}%, Var:{np.var(NME_2D_68_fix_list):.3f}")
+        
+        
+        
+        
+        
+        
+        
+        
+        ###### roll angle influence of alignment error ######
+        # idx = 4
+        # w_name = [Name_list[idx] for i in range(36)]
+        # w_set = [benchmark[benchmark.get_idx_by_name(name)] for name in w_name] # list(size,) of tuple(2,) of tensors(3,256,256)
+        
+        # _, w_uvmap = zip(*w_set) # 2 list(size,) of tensor(3,256,256)
+        
+        # w_uvmap = torch.stack(w_uvmap)
+        # w_uvmap = inverse_transform(w_uvmap)
+        
+        # def rotmatrix(radian):
+        #     R = np.array([
+        #         [np.cos(radian), np.sin(-radian), 0],
+        #         [np.sin(radian),  np.cos(radian), 0],
+        #         [             0,               0, 1]
+        #     ])
+        #     return R
+        
+        # img_roll_angle = angle_list[idx][2]
+        # roll_aug_list = [i * 10 for i in range(36)]
+        
+        # w_uvmap = [np.matmul((w_uvm - np.array([128,128,0])),rotmatrix(np.deg2rad(angle))) + np.array([128,128,0]) for w_uvm, angle in zip(w_uvmap, roll_aug_list)]
+        
+        # w_image = [Image.open("/home/vlsilab/Dataset/Img2Pos_test/AFLW2000_all-crop/" + os.path.join(name,name) + "_cropped.jpg") for name in w_name]
+        # w_image = [transform(w_img.rotate(angle)) for w_img , angle in zip(w_image, roll_aug_list)]
+        # w_image = torch.stack(w_image)
+        
+        # G_in = w_image
+        # G_out = G(G_in)
+        # G_in = inverse_transform(G_in)
+        # G_out = inverse_transform(G_out)
+        
+        # w_image = inverse_transform(w_image)
+        
+        # NME_2D_68_fix_list = []
+        # for name, g_out, uvmap in zip(w_name, G_out, w_uvmap):
+        #     G_out_68 = get_landmarks(g_out, uv_kpt_ind) # shape: (68,3)
+        #     G_GT_68  = get_landmarks(uvmap, uv_kpt_ind) # shape: (68,3)
+        #     L2_loss_2D_68 = np.mean(np.sqrt(np.sum(np.square(G_out_68[:,:2] - G_GT_68[:,:2]), axis=1)))
+
+        #     _, bbox, _ = benchmark.__get_name_bbox_kpt__(benchmark.get_idx_by_name(name))
+            
+        #     normalization_factor = np.sqrt(np.prod(bbox[1] - bbox[0])) # sqrt of bbox area
+        #     NME_2D_68 = L2_loss_2D_68/normalization_factor    
+        #     NME_2D_68_fix_list.append(NME_2D_68)
+        
+        # roll_list = np.array([img_roll_angle - angle for angle in roll_aug_list])
+        # roll_list = np.where(roll_list < -180, roll_list + 360, roll_list)
+        # roll_list = np.where(roll_list >  180, roll_list - 360, roll_list)
+        
+        # grid_of_alignment(G_in, G_out, uv_kpt_ind, "../Image/img_npy_7/roll_aug_GAN.jpg", nrows_ncols=(6, 6), error_list = NME_2D_68_fix_list, angle_list=roll_list)
+        # grid_of_alignment(w_image, w_uvmap, uv_kpt_ind, "../Image/img_npy_7/roll_aug_GT.jpg", nrows_ncols=(6, 6))
+        
+        # fig, ax = plt.subplots()
+        # ax.bar(roll_list, NME_2D_68_fix_list)
+        # fig.savefig("../Image/img_npy_7/Influence_of_roll_on_NME.png")
+        
+        
 
 if __name__ == '__main__':
     main()

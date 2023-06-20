@@ -2,6 +2,8 @@ import torch
 import torch.nn as nn
 from Model.Unit import *
 
+__all__ = ['Discriminator',]
+
 class Discriminator(nn.Module):
     def __init__(self, in_channels, args):
         super(Discriminator, self).__init__()

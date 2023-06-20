@@ -4,15 +4,15 @@ python train_GAN.py \
         --input_dir "/home/vlsilab/Dataset/Img2Pos_train/" \
         --bchm_dir "/home/vlsilab/Dataset/Img2Pos_test/AFLW2000_all-crop/" \
         \
-        --ckpt_dir "../Log/GAN_training_log/img_npy_4/ckpt/" \
-        --img_dir "../Log/GAN_training_log/img_npy_4/img/" \
-        --tblog_dir "../Log/GAN_training_log/img_npy_4/tblog/" \
+        --ckpt_dir "../Log/GAN_training_log/img_npy_7/ckpt/" \
+        --img_dir "../Log/GAN_training_log/img_npy_7/img/" \
+        --tblog_dir "../Log/GAN_training_log/img_npy_7/tblog/" \
         \
         --ngf 64 \
         --ndf 64 \
         \
         --epochs 300 \
-        --lr 0.0001 \
+        --lr 0.001 \
         --decay_step 30 \
         --beta1 0.9 \
         --beta2 0.99 \
@@ -28,5 +28,4 @@ python train_GAN.py \
         --print_freq 100 \
         --ckpt_freq 5 \
         --validate_freq 1 \
-        --bm_version "ori" \
-        --gan_pre_trained
+        --bm_version "ori"

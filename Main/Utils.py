@@ -7,6 +7,17 @@ import pickle
 import logging
 from mpl_toolkits.axes_grid1 import ImageGrid
 
+def count_parameters(model):
+    return sum(p.numel() for p in model.parameters() if p.requires_grad)
+
+def rotmatrix(radian):
+    R = np.array([
+        [np.cos(radian), np.sin(-radian), 0],
+        [np.sin(radian),  np.cos(radian), 0],
+        [             0,               0, 1]
+    ])
+    return R
+
 def check_data(image, uvmap):
     plt.subplot(1, 2, 1)
     plt.title("Image")
@@ -200,8 +211,11 @@ def grid_of_alignment(G_in,pos_map,uv_kpt_ind,file_name,
         
         # show angle
         if angle_list is not None:
-            ax.text(0,255.5,f"p:{int(angle_list[idx][0])}, y:{int(angle_list[idx][1])}, r:{int(angle_list[idx][2])}", color='red', fontweight="bold")
-
+            if type(angle_list[idx]) is tuple: 
+                ax.text(0,255.5,f"p:{int(angle_list[idx][0])}, y:{int(angle_list[idx][1])}, r:{int(angle_list[idx][2])}", color='red', fontweight="bold")
+            else:
+                ax.text(0,255.5,f"r:{int(angle_list[idx])}", color='red', fontweight="bold")
+            
         if error_list is not None:
             ax.text(0,240.5,f"NME:{error_list[idx] * 100. :.2f} %", color='red', fontweight="bold")
         
@@ -315,3 +329,86 @@ def get_align68_losses(G, benchmark, inverse_transform, uv_kpt_ind, parent_dir, 
             Name_list = pickle.load(fp)
         
     return Name_list, NME_2D_68_list, NME_3D_68_list
+
+
+# == Analysis ==
+def angle_error_analysis(NME_2D_68_list, angle_list):
+        
+        ## == statistic by zy ==
+        # AFLW2000_3D_pitch = np.array([1813, 126, 61])
+        # AFLW2000_3D_yaw = np.array([1312, 383, 305])
+        # AFLW2000_3D_roll = np.array([1745, 184, 71])
+        
+        ## gimbol lock
+        # AFLW2000_3D_pitch = np.array([1814, 128,  58,])
+        # AFLW2000_3D_yaw = np.array([1313, 383, 304,])
+        # AFLW2000_3D_roll = np.array([1746, 185,  69,])
+        
+        ## gimbol lock + roll 0~60~120~180 <- I choose this
+        # AFLW2000_3D_pitch = np.array([1814, 128,  58,])
+        # AFLW2000_3D_yaw = np.array([1313, 383, 304,])
+        # AFLW2000_3D_roll = np.array([1931, 60, 9,])
+        
+    dict = {
+        "pitch": (0, [30, 60, 90] , [1814, 128,  58,]),
+        "yaw"  : (1, [30, 60, 90] , [1313, 383, 304] ),
+        'roll' : (2, [60, 120, 180], [1931, 60, 9,]   )
+    }
+        
+    choose = dict.keys()
+    
+    # def cov(error_list, angle_list, dict, c):
+    #     angle_list = angle_list[:,dict[c][0]]
+        
+    #     angle_list = np.where(np.abs(angle_list) >=  dict[c][1][2],  dict[c][1][2] * np.sign(angle_list), angle_list) 
+    #     angle_list = np.abs(angle_list)
+                                
+    #     return ((error_list - np.mean(error_list)) * (angle_list - np.mean(angle_list))).sum()/(len(error_list))
+    
+    for c in choose:
+        l = [0.,0.,0.]
+        color_list = []
+        
+        for error,angle in zip(NME_2D_68_list, angle_list):
+            if np.abs(angle[dict[c][0]]) < dict[c][1][0]:
+                color_list.append("green")
+                l[0] += error
+            elif np.abs(angle[dict[c][0]]) < dict[c][1][1]:
+                color_list.append("blue")
+                l[1] += error
+            else:
+                color_list.append("red")
+                l[2] += error
+        
+        print(f"=={c}==")
+        print(f"{0:03d}~{dict[c][1][0]:03d}:{l[0]/dict[c][2][0]*100:.2f}%")
+        print(f"{dict[c][1][0]:03d}~{dict[c][1][1]:03d}:{l[1]/dict[c][2][1]*100:.2f}%")
+        print(f"{dict[c][1][1]:03d}~{dict[c][1][2]:03d}:{l[2]/dict[c][2][2]*100:.2f}%")
+        
+        print(f"Mean: {(l[0]/dict[c][2][0] + l[1]/dict[c][2][1] + l[2]/dict[c][2][2])*100/3:.2f}%")
+        print(f"Total Mean: {(l[0] + l[1] + l[2])/2000*100:.2f}%")
+        
+        print(f"max: {np.max(angle_list[:,dict[c][0]])}, min: {np.min(angle_list[:,dict[c][0]])}")
+        
+        
+        # print(f"Covariance of {c} and error is: {cov(NME_2D_68_list, angle_list, dict, c)}")
+        
+        # fig = plt.figure(figsize=(50,20))
+        # plt.scatter(angle_list[:,dict[c][0]],NME_2D_68_list)
+        # plt.title(c, fontsize=40)
+        # plt.savefig(f"../Image/img_npy_6/angle_{c}_with_error.png")
+        
+        
+        plt.figure(figsize=(50,20))
+    
+        plt.bar(list(range(2000)),NME_2D_68_list, color=color_list)
+        plt.title(c, fontsize=40)
+    
+        colors = {f'0~{dict[c][1][0]}':'green', f'{dict[c][1][0]}~{dict[c][1][1]}':'blue', f'{dict[c][1][1]}~{dict[c][1][2]}':'red'}         
+        labels = list(colors.keys())
+        handles = [plt.Rectangle((0,0),1,1, color=colors[label]) for label in labels]
+        plt.legend(handles, labels, fontsize=40)
+    
+        plt.savefig(f"../Image/img_npy_6/NME_2D_68_{c}.png")
+        logging.info(f"../Image/img_npy_6/NME_2D_68_{c}.png saved!")
+        print("="*20)

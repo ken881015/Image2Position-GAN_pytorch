@@ -11,6 +11,19 @@ import sys
 
 from Utils import get_landmarks, plot_landmarks_edge
 
+__all__ = [
+    "I2P_train",
+    "I2P_bm",
+    "I2P_bm_re",
+    "CelebA",
+    "Normalize_wk",
+    "ChannelScale_wk",
+    "RandomErase_wk",
+    "npy2tensor_wk",
+    "tensor2npy_wk",
+    # "rotate_PIL_wk"
+]
+
 
 class I2P_train(Dataset):
     '''
@@ -51,9 +64,9 @@ class I2P_train(Dataset):
             
             # roll_augments
             if np.abs(roll_angle) < 60: # check the roll angle range in [-30, 30]
-                if np.random.rand() < 0.1: # 10% change to be augmented
+                if np.random.rand() < 0.3: # 30% change to be augmented
                     img_w, img_h = image.size
-                    angle = np.random.rand() * 120 # try to move the roll angle from [0,60] to [60, 180]
+                    angle = 60 + np.random.rand() * 60 # try to move the roll angle from [0,60] to [60, 180]
                     radian = np.deg2rad(angle)
                     image = image.rotate(angle)
                     R = np.array([
@@ -66,7 +79,7 @@ class I2P_train(Dataset):
                     uvmap_npy = np.matmul(uvmap_npy, R)
                     uvmap_npy += np.array([img_w//2,img_h//2,0])
                     
-                # if np.random.rand() < 0.25:
+                # if np.random.rand() < 0.1:
                 #     image = image.transpose(Image.FLIP_LEFT_RIGHT)
                 #     uvmap_npy[:,:,0] = 256 - 1 - uvmap_npy[:,:,0] 
             
@@ -270,14 +283,15 @@ class tensor2npy_wk:
         npy = tensor.cpu().detach().numpy().transpose((0,2,3,1))
         return npy
 
-class rotate_PIL_wk:
-    def __call__(self, angle, pil_img):
-        rotated_pil_img = pil_img.rotate(angle)
-        return rotated_pil_img
+# class rotate_PIL_wk:
+#     def __call__(self, angle, pil_img):
+#         rotated_pil_img = pil_img.rotate(angle)
+#         return rotated_pil_img
 
 if __name__ == '__main__':
     dataset = I2P_train("/home/vlsilab/Dataset/Img2Pos_train/")
     image, npy = dataset[0]
+    print(npy.shape)
     # npy = np.load("./AFW_134212_1_0_angle.npy")
     # benchmark = I2P_bm("/home/vlsilab/Dataset/Img2Pos_test/AFLW2000_all-crop/")
 
@@ -308,20 +322,20 @@ if __name__ == '__main__':
     
     # rotated_image = image.rotate(angle)
     
-    image = image.transpose(Image.FLIP_LEFT_RIGHT)
-    a_npy = 256 - 1 - npy[:,:,0] 
-    b_npy = (npy[:,:,0] - 128) * (-1) + 128
+    # image = image.transpose(Image.FLIP_LEFT_RIGHT)
+    # a_npy = 256 - 1 - npy[:,:,0] 
+    # b_npy = (npy[:,:,0] - 128) * (-1) + 128
     
-    print((a_npy == b_npy).all())
+    # print((a_npy == b_npy).all())
         
     # image = plt.imread("./image03871.jpg")
     # kpt = sio.loadmat("./image03871.mat")["pt3d_68"][:2,:].T
     # print(kpt.shape)
-    sys.exit()
-    fig, ax = plt.subplots(figsize=(10,10))
-    ax.imshow(image)
-    ax.get_yaxis().set_ticks([]); ax.get_xaxis().set_ticks([])
-    ax.scatter(npy[::10,::10,0], npy[::10,::10,1])
+    # sys.exit()
+    # fig, ax = plt.subplots(figsize=(10,10))
+    # ax.imshow(image)
+    # ax.get_yaxis().set_ticks([]); ax.get_xaxis().set_ticks([])
+    # ax.scatter(npy[::10,::10,0], npy[::10,::10,1])
     # plot_landmarks_edge(kpt, ax)
     
-    plt.savefig("align_by_uvmap.png")
+    # plt.savefig("align_by_uvmap.png")

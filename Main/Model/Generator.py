@@ -2,6 +2,8 @@ import torch
 import torch.nn as nn
 from Model.Unit import *
 
+__all__ = ['Generator',]
+
 class Generator(nn.Module):
     def __init__(self, in_channels, args):
         super(Generator, self).__init__()

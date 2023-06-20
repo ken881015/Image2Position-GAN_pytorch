@@ -1,6 +1,8 @@
 import torch
 import torch.nn as nn
 
+__all__ = ['Multiply', 'CBLR', 'CBR', 'CLR', 'UCBDR', 'UCTM']
+
 class Multiply(nn.Module):
     def __init__(self, alpha):
         super().__init__()
@@ -69,21 +71,21 @@ class UCTM(nn.Module):
     def forward(self, x):
         return self.block(x)
 
-class Minibatch_stddev(nn.Module):
-    def __init__(self, batch_size, group_size=4):
-        super(Minibatch_stddev, self).__init__()
-        # self.block = nn.Sequential(
-        #     nn.Upsample(scale_factor=2, mode='nearest'),
-        #     nn.Conv2d(in_channels, out_channels, 3, 1, 1),
-        #     nn.Tanh()
-        # )
-        self.group_size = min(group_size, batch_size)
+# class Minibatch_stddev(nn.Module):
+#     def __init__(self, batch_size, group_size=4):
+#         super(Minibatch_stddev, self).__init__()
+#         # self.block = nn.Sequential(
+#         #     nn.Upsample(scale_factor=2, mode='nearest'),
+#         #     nn.Conv2d(in_channels, out_channels, 3, 1, 1),
+#         #     nn.Tanh()
+#         # )
+#         self.group_size = min(group_size, batch_size)
 
-    def forward(self, input_tensor):
-        shape = input_tensor.size()
-        y = input_tensor.view(self.group_size, -1, shape[1], shape[2], shape[3])
-        y -= torch.mean(y, dim=0, keepdim=True)
-        pass
+#     def forward(self, input_tensor):
+#         shape = input_tensor.size()
+#         y = input_tensor.view(self.group_size, -1, shape[1], shape[2], shape[3])
+#         y -= torch.mean(y, dim=0, keepdim=True)
+#         pass
     
 
 if __name__ == '__main__':
